@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Sincronizar Capacitor (Android)
-        run: npx cap sync android --verbose || (echo '--- reintento sin verbose ---' && node_modules/.bin/cap sync android)
+        run: node_modules/.bin/cap sync android
 
       - name: Compilar APK (debug, instalable)
         working-directory: android
