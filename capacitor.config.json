@@ -1,0 +1,19 @@
+{
+  "appId": "com.ignotek.solarscope",
+  "appName": "Solar Scope",
+  "webDir": "www",
+  "server": {
+    "url": "https://solarscopecrm.com/calculadora/app/",
+    "cleartext": false,
+    "allowNavigation": [
+      "solarscopecrm.com",
+      "*.solarscopecrm.com",
+      "ignotek.com",
+      "*.ignotek.com",
+      "accounts.google.com",
+      "*.googleapis.com"
+    ]
+  },
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "always" }
+}

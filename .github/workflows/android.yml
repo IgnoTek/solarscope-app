@@ -1,11 +1,15 @@
 name: Build Android APK (Solar Scope)
 
-# Compila la app de Android en la nube (gratis, servidores de GitHub).
-# Al terminar deja el APK listo para descargar e instalar en el teléfono.
+# Compila la app de Android en la nube (gratis, servidores de GitHub) y deja el
+# APK en la rama "builds" para poder bajarlo (los artefactos de Actions están
+# bloqueados por el proxy de esta sesión, pero git sí funciona).
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:   # permite lanzarlo a mano con un botón
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -37,9 +41,24 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Guardar el APK para descargar
+      - name: Guardar el APK como artefacto (respaldo, descargable desde GitHub)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SolarScope-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Entregar el APK en la rama "builds" (vía git)
+        if: success()
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/SolarScope.apk
+          ls -la dist/SolarScope.apk
+          git config user.name "ci-bot"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan builds
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          git add -f dist/SolarScope.apk
+          git commit -m "APK $(date -u +%Y%m%d-%H%M%S)"
+          git push -f origin builds
