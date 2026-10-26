@@ -1,0 +1,45 @@
+name: Build Android APK (Solar Scope)
+
+# Compila la app de Android en la nube (gratis, servidores de GitHub).
+# Al terminar deja el APK listo para descargar e instalar en el teléfono.
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:   # permite lanzarlo a mano con un botón
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el proyecto
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Instalar dependencias
+        run: npm ci || npm install
+
+      - name: Sincronizar Capacitor (Android)
+        run: npx cap sync android
+
+      - name: Compilar APK (debug, instalable)
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Guardar el APK para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolarScope-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

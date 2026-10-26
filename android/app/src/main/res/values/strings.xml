@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Solar Scope</string>
+    <string name="title_activity_main">Solar Scope</string>
+    <string name="package_name">com.ignotek.solarscope</string>
+    <string name="custom_url_scheme">com.ignotek.solarscope</string>
+</resources>

@@ -1,0 +1,63 @@
+=============================================================================
+ SOLAR SCOPE · APP MÓVIL — TU PARTE (lo único que yo no puedo hacer por ti)
+=============================================================================
+Yo hago TODO el código, el armado y la compilación en la nube. Tu parte son las
+cuentas (llevan tu identidad y tu pago). Hazlas en este orden; la de Apple es la
+más lenta, por eso va de primera.
+
+-----------------------------------------------------------------------------
+1) GITHUB  (GRATIS)  — para que yo compile y te entregue el APK
+-----------------------------------------------------------------------------
+Es donde se compila la app en la nube (no tienes que instalar nada en tu
+computadora). Tú solo creas la cuenta y la conectas; yo hago el resto y te
+mando el APK listo para instalar.
+  a) Entra a:  https://github.com/signup
+  b) Crea la cuenta con tu correo (gratis, sin tarjeta).
+  c) Avísame cuando esté y te digo el botón exacto para conectarla a Claude.
+Costo: $0.
+
+-----------------------------------------------------------------------------
+2) APPLE DEVELOPER  ($99 USD al año)  — para el iPhone (lo más lento, EMPIEZA HOY)
+-----------------------------------------------------------------------------
+Sin esta cuenta el iPhone NO se puede (regla de Apple). La verificación de Apple
+puede tardar días, por eso conviene abrirla ya.
+  a) Entra a:  https://developer.apple.com/programs/enroll/
+  b) Inicia sesión con tu Apple ID (o crea uno). Necesita verificación en 2 pasos.
+  c) Tipo de cuenta: elige  "Individual / Sole Proprietor"  (es la más rápida;
+     sale tu nombre como desarrollador).
+     — Si prefieres que salga "Ignotek" como desarrollador, elige "Company /
+       Organization": es mejor para la marca pero pide un número D-U-N-S (gratis)
+       y tarda más. Para arrancar rápido, Individual está bien; se puede cambiar
+       después.
+  d) Paga la membresía: $99 USD/año.
+Costo: $99/año.  Con esto se desbloquea TestFlight (probar la app con tu equipo)
+y luego el App Store.
+
+-----------------------------------------------------------------------------
+3) GOOGLE PLAY CONSOLE  ($25 USD una sola vez)  — SOLO si quieres Android en la tienda
+-----------------------------------------------------------------------------
+OJO: para que tu equipo use la app en Android NO necesitas esto. Yo te entrego el
+APK y se instala directo (sideload). Play Store es solo si después quieres que
+cualquiera la baje de la tienda.
+  a) Entra a:  https://play.google.com/console/signup
+  b) Regístrate (como negocio si quieres que salga "Ignotek").
+  c) Paga el registro: $25 USD (una sola vez, de por vida).
+Costo: $25 una vez.  (Puedes dejarlo para más adelante.)
+
+=============================================================================
+ RESUMEN DE COSTOS
+=============================================================================
+  GitHub ................. $0
+  Apple Developer ........ $99 / año      (obligatorio para iPhone)
+  Google Play ............ $25 una vez    (opcional; Android funciona sin esto)
+
+=============================================================================
+ QUÉ PASA DESPUÉS (lo hago yo)
+=============================================================================
+ - Apenas conectes GitHub: subo el proyecto, se compila el APK solo y te lo
+   mando listo para instalar en Android (tu equipo lo instala de una).
+ - Apenas tengas Apple Developer: configuro la firma, compilo para iPhone y lo
+   subo a TestFlight para que tu equipo lo pruebe.
+ - Después añadimos la parte de llamadas (burbuja / caller ID) y la probamos en
+   un teléfono real tuyo antes de repartirla.
+=============================================================================
