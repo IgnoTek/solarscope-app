@@ -39,7 +39,18 @@ jobs:
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle-out.txt
+
+      - name: Publicar log de Gradle si falló (vía git)
+        if: failure()
+        run: |
+          tail -n 250 gradle-out.txt > gradle-error.txt || cp gradle-out.txt gradle-error.txt
+          git config user.name "ci-bot"
+          git config user.email "ci@users.noreply.github.com"
+          git add -f gradle-error.txt
+          git commit -m "gradle error log [skip ci]" || echo "nada"
+          git push origin HEAD:main || echo "push fallo"
 
       - name: Guardar el APK como artefacto (respaldo, descargable desde GitHub)
         if: success()
