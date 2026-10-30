@@ -1,5 +1,24 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// Firma FIJA de Solar Scope.
+// Se firma SIEMPRE con la misma llave (solarscope-signing.jks + keystore.properties,
+// ambos versionados en el repo) para que cada APK nuevo se pueda instalar ENCIMA
+// del anterior sin "app not installed" (Android exige la misma firma para
+// actualizar). Se aplica tanto a debug como a release, porque el flujo de
+// GitHub Actions compila assembleDebug.
+// ---------------------------------------------------------------------------
+def ssKeystoreFile = file('solarscope-signing.jks')
+def ssKeystoreProps = file('keystore.properties')
+def ssSign = ssKeystoreFile.exists() && ssKeystoreProps.exists()
+def ssProps = new Properties()
+if (ssSign) { ssKeystoreProps.withInputStream { ssProps.load(it) } }
+
+// versionCode monótono: lo inyecta el flujo con -PappVersionCode=<run_number+100>.
+// Cae a 1 si no se pasa (compilación local). versionName igual: -PappVersionName.
+def ssVersionCode = (project.hasProperty('appVersionCode') ? project.appVersionCode.toInteger() : 1)
+def ssVersionName = (project.hasProperty('appVersionName') ? project.appVersionName.toString() : "1.0")
+
 android {
     namespace "com.ignotek.solarscope"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +26,8 @@ android {
         applicationId "com.ignotek.solarscope"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode ssVersionCode
+        versionName ssVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +35,22 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        fixed {
+            if (ssSign) {
+                storeFile ssKeystoreFile
+                storePassword ssProps.getProperty('storePassword')
+                keyAlias ssProps.getProperty('keyAlias')
+                keyPassword ssProps.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (ssSign) signingConfig signingConfigs.fixed
+        }
         release {
+            if (ssSign) signingConfig signingConfigs.fixed
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
