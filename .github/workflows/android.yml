@@ -40,7 +40,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           set -o pipefail
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../gradle-out.txt
+          # versionCode monótono (siempre > 1) para que cada build sea una
+          # actualización válida; +100 para quedar por encima del versionCode 1
+          # de las versiones viejas. La firma ya es fija (solarscope-signing.jks).
+          VC=$(( ${{ github.run_number }} + 100 ))
+          VN="1.0.${{ github.run_number }}"
+          echo "versionCode=$VC  versionName=$VN"
+          ./gradlew assembleDebug --no-daemon --stacktrace \
+            -PappVersionCode=$VC -PappVersionName=$VN 2>&1 | tee ../gradle-out.txt
 
       - name: Publicar log de Gradle si falló (vía git)
         if: failure()
