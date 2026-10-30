@@ -29,6 +29,8 @@ public class CallScopeReceiver extends BroadcastReceiver {
     private static String lastState = TelephonyManager.EXTRA_STATE_IDLE;
     private static String lastNumber = null;
     private static boolean wasIncoming = false;
+    private static long offhookTime = 0;    // momento en que se contestó/conectó (para la duración real, sin depender del registro)
+    private static long callStartTime = 0;  // momento en que empezó ESTA llamada (para no leer el registro de la ANTERIOR)
 
     static final String CH_ID = "callscope_register";
     static final String PREFS = "callscope";
@@ -42,15 +44,26 @@ public class CallScopeReceiver extends BroadcastReceiver {
             String incoming = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER);
             if (state == null) return;
 
+            boolean fromIdle = TelephonyManager.EXTRA_STATE_IDLE.equals(lastState);
+
             if (TelephonyManager.EXTRA_STATE_RINGING.equals(state)) {
+                if (fromIdle) {                 // NUEVA llamada entrante: olvidar por completo la anterior (si no, el caller ID muestra al anterior)
+                    lastNumber = null; offhookTime = 0; callStartTime = System.currentTimeMillis();
+                }
                 wasIncoming = true;
-                if (incoming != null && !incoming.isEmpty()) lastNumber = incoming;
+                if (incoming != null && !incoming.isEmpty()) lastNumber = incoming;   // número REAL de ESTA llamada (viene en el broadcast de timbre)
                 JSONObject c = ContactStore.lookup(app, lastNumber);
-                BubbleManager.show(app, c, lastNumber);
+                BubbleManager.show(app, c, lastNumber);                                 // lastNumber null -> burbuja "desconocido", NUNCA el del anterior
                 CallScopePlugin.emit("callStateChanged", "ringing", lastNumber, c, 0, "incoming");
 
             } else if (TelephonyManager.EXTRA_STATE_OFFHOOK.equals(state)) {
-                // activa: si fue entrante, mantener/actualizar burbuja
+                if (fromIdle) {                 // SALIENTE marcada desde el teléfono (sin timbre previo): nueva, olvidar la anterior
+                    lastNumber = (incoming != null && !incoming.isEmpty()) ? incoming : null;
+                    wasIncoming = false; callStartTime = System.currentTimeMillis();
+                } else if (lastNumber == null && incoming != null && !incoming.isEmpty()) {
+                    lastNumber = incoming;
+                }
+                if (offhookTime == 0) offhookTime = System.currentTimeMillis();         // se contestó/conectó ahora -> base para la duración real
                 if (wasIncoming) {
                     JSONObject c = ContactStore.lookup(app, lastNumber);
                     BubbleManager.show(app, c, lastNumber);
@@ -60,52 +73,86 @@ public class CallScopeReceiver extends BroadcastReceiver {
 
             } else if (TelephonyManager.EXTRA_STATE_IDLE.equals(state)) {
                 BubbleManager.hide();
-                if (!TelephonyManager.EXTRA_STATE_IDLE.equals(lastState)) {
-                    // acaba de colgar: leer el registro de llamadas
-                    handleEnded(app);
+                if (!fromIdle) {
+                    // acaba de colgar: captura los datos de ESTA llamada y procésalos (el reset de los estáticos
+                    // ocurre justo abajo, así una llamada nueva arranca limpia aunque el procesamiento siga en segundo plano)
+                    handleEnded(app, lastNumber, offhookTime, callStartTime, wasIncoming);
                 }
-                wasIncoming = false;
-                lastNumber = null;
+                wasIncoming = false; lastNumber = null; offhookTime = 0; callStartTime = 0;
             }
             lastState = state;
         } catch (Throwable t) { /* nunca romper la llamada */ }
     }
 
-    private void handleEnded(Context app) {
-        try {
-            String number = lastNumber;
-            long durationSec = 0;
-            String type = wasIncoming ? "incoming" : "outgoing";
-            // leer la última entrada del registro de llamadas (número + duración reales)
-            try {
-                Cursor cur = app.getContentResolver().query(
-                        CallLog.Calls.CONTENT_URI,
-                        new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DURATION, CallLog.Calls.TYPE, CallLog.Calls.DATE},
-                        null, null, CallLog.Calls.DATE + " DESC");
-                if (cur != null) {
-                    if (cur.moveToFirst()) {
-                        String n = cur.getString(0);
-                        if (n != null && !n.isEmpty()) number = n;
-                        durationSec = cur.getLong(1);
-                        int t = cur.getInt(2);
-                        if (t == CallLog.Calls.OUTGOING_TYPE) type = "outgoing";
-                        else if (t == CallLog.Calls.MISSED_TYPE) type = "missed";
-                        else type = "incoming";
+    /* Procesa el fin de llamada con los datos CAPTURADOS de ESA llamada (no de estáticos que una
+       llamada nueva podría pisar). En segundo plano (goAsync) porque el sistema escribe la entrada
+       en el registro de llamadas con RETRASO: leerla al instante devolvía la llamada ANTERIOR, y por
+       eso el caller ID mostraba a quien había llamado antes. Aquí el número de referencia es el que
+       capturamos en el timbre (capNumber) y SOLO se usa una fila del registro si es de ESTA llamada. */
+    private void handleEnded(final Context app, final String capNumber, final long offhook,
+                             final long started, final boolean incomingCall) {
+        final PendingResult pr = goAsync();
+        final long duration0 = (offhook > 0) ? Math.max(0, (System.currentTimeMillis() - offhook) / 1000) : 0;
+        new Thread(new Runnable() {
+            public void run() {
+                String number = capNumber;
+                long durationSec = duration0;
+                String type = incomingCall ? "incoming" : "outgoing";
+                try {
+                    // Reintenta leer el registro hasta que aparezca la fila de ESTA llamada (número igual, o fecha
+                    // igual/posterior al inicio de esta llamada). Para entrantes ya tenemos el número del timbre;
+                    // para salientes (sin timbre) el número solo llega por el registro, que puede tardar.
+                    for (int attempt = 0; attempt < 6; attempt++) {
+                        boolean matched = false;
+                        try {
+                            Cursor cur = app.getContentResolver().query(
+                                    CallLog.Calls.CONTENT_URI,
+                                    new String[]{CallLog.Calls.NUMBER, CallLog.Calls.DURATION, CallLog.Calls.TYPE, CallLog.Calls.DATE},
+                                    null, null, CallLog.Calls.DATE + " DESC");
+                            if (cur != null) {
+                                if (cur.moveToFirst()) {
+                                    String n = cur.getString(0);
+                                    long d = cur.getLong(1);
+                                    int t = cur.getInt(2);
+                                    long when = cur.getLong(3);
+                                    boolean sameNum = eq10(number, n);
+                                    boolean thisCall = started > 0 && when >= started - 3000;   // fila de ESTA llamada, no de una anterior
+                                    if (sameNum || thisCall) {
+                                        if (n != null && !n.isEmpty()) number = n;
+                                        if (d > 0) durationSec = d;
+                                        if (t == CallLog.Calls.OUTGOING_TYPE) type = "outgoing";
+                                        else if (t == CallLog.Calls.MISSED_TYPE) type = "missed";
+                                        else type = "incoming";
+                                        matched = true;
+                                    }
+                                }
+                                cur.close();
+                            }
+                        } catch (Throwable ignored) { /* sin permiso de registro: seguimos con lo capturado */ }
+                        if (matched || number != null) break;   // entrante: ya hay número fiable; o ya hallamos la fila de esta llamada
+                        try { Thread.sleep(350); } catch (InterruptedException ie) { break; }
                     }
-                    cur.close();
-                }
-            } catch (Throwable ignored) { /* sin permiso de registro: usamos lo que haya */ }
 
-            if (number == null || number.isEmpty()) return;
+                    if (number == null || number.isEmpty()) return;   // sin número fiable de ESTA llamada: no notificar (nunca al anterior)
 
-            JSONObject c = ContactStore.lookup(app, number);
-            String nombre = c != null ? c.optString("nombre", c.optString("name", "")) : "";
-            String label = !nombre.isEmpty() ? nombre : prettyNumber(number);
+                    JSONObject c = ContactStore.lookup(app, number);
+                    String nombre = c != null ? c.optString("nombre", c.optString("name", "")) : "";
+                    String label = !nombre.isEmpty() ? nombre : prettyNumber(number);
 
-            savePending(app, number, durationSec, type, nombre);
-            notifyRegister(app, label, durationSec, number, type, nombre);
-            CallScopePlugin.emit("callEnded", type, number, c, durationSec, type);
-        } catch (Throwable t) { /* best-effort */ }
+                    savePending(app, number, durationSec, type, nombre);
+                    notifyRegister(app, label, durationSec, number, type, nombre);
+                    CallScopePlugin.emit("callEnded", type, number, c, durationSec, type);
+                } catch (Throwable t) { /* best-effort */ }
+                finally { try { pr.finish(); } catch (Throwable ignored) {} }
+            }
+        }).start();
+    }
+
+    /** true si dos números tienen los mismos últimos 10 dígitos (PR/US). */
+    private static boolean eq10(String a, String b) {
+        if (a == null || b == null) return false;
+        String x = ContactStore.last10(a), y = ContactStore.last10(b);
+        return x != null && x.length() >= 7 && x.equals(y);
     }
 
     private void savePending(Context app, String tel, long dur, String tipo, String nombre) {
