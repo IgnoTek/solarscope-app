@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.IgnoAssist" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#0D6E66</item>
+        <item name="android:colorPrimaryDark">#0A5A53</item>
+        <item name="android:colorAccent">#0D6E66</item>
+        <item name="android:windowBackground">#F3F6F6</item>
+        <item name="android:statusBarColor">#0D6E66</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

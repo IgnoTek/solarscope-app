@@ -1,0 +1,74 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// ---------------------------------------------------------------------------
+// Firma FIJA de IgnoAssist: siempre la misma llave (ignoassist-signing.jks +
+// keystore.properties, versionados) para que cada APK nuevo se instale ENCIMA
+// del anterior sin "app not installed". Aplica a debug y release.
+// ---------------------------------------------------------------------------
+def iaKeystoreFile = file('ignoassist-signing.jks')
+def iaKeystoreProps = file('keystore.properties')
+def iaSign = iaKeystoreFile.exists() && iaKeystoreProps.exists()
+def iaProps = new Properties()
+if (iaSign) { iaKeystoreProps.withInputStream { iaProps.load(it) } }
+
+// versionCode monotono: lo inyecta GitHub Actions con -PappVersionCode=<run_number+100>.
+def iaVersionCode = (project.hasProperty('appVersionCode') ? project.appVersionCode.toInteger() : 1)
+def iaVersionName = (project.hasProperty('appVersionName') ? project.appVersionName.toString() : "1.0.0")
+
+android {
+    namespace 'com.ignotek.ignoassist'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.ignotek.ignoassist'
+        minSdk 26
+        targetSdk 34
+        versionCode iaVersionCode
+        versionName iaVersionName
+    }
+
+    signingConfigs {
+        fixed {
+            if (iaSign) {
+                storeFile iaKeystoreFile
+                storePassword iaProps.getProperty('storePassword')
+                keyAlias iaProps.getProperty('keyAlias')
+                keyPassword iaProps.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (iaSign) signingConfig signingConfigs.fixed
+        }
+        release {
+            if (iaSign) signingConfig signingConfigs.fixed
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    // Sin dependencias externas a proposito: solo el SDK de Android y Kotlin.
+}
