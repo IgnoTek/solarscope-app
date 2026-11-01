@@ -61,13 +61,42 @@ object Notifs {
         return b.build()
     }
 
-    fun accionCreada(ctx: Context, id: Int, titulo: String, cuando: String, tipo: String, puedeDeshacer: Boolean) {
+    fun llamar(ctx: Context, req: Int, telefono: String): PendingIntent {
+        val i = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + telefono.filter { it.isDigit() || it == '+' })).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(ctx, req, i, flags())
+    }
+    fun abrirUrl(ctx: Context, req: Int, url: String): PendingIntent {
+        val i = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(ctx, req, i, flags())
+    }
+
+    fun accionCreada(ctx: Context, id: Int, titulo: String, cuando: String, tipo: String, puedeDeshacer: Boolean, telefono: String = "") {
         val etiqueta = when (tipo) { "evento" -> "Evento en tu calendario"; "recordatorio" -> "Recordatorio programado"; "tarea" -> "Tarea anotada"; else -> "Nota guardada" }
         val b = Notification.Builder(ctx, CH_ACCIONES).setSmallIcon(R.drawable.ic_mic)
             .setContentTitle("$etiqueta: $titulo").setContentText(cuando).setStyle(Notification.BigTextStyle().bigText(cuando))
             .setContentIntent(abrirApp(ctx, BASE_ACCION + id)).setAutoCancel(true)
+        if (telefono.isNotBlank()) b.addAction(Notification.Action.Builder(null, "Llamar", llamar(ctx, BASE_ACCION + id + 50000, telefono)).build())
         if (puedeDeshacer) b.addAction(Notification.Action.Builder(null, "Deshacer", broadcast(ctx, ActionReceiver.ACCION_DESHACER, BASE_ACCION + id, id)).build())
         nm(ctx).notify(BASE_ACCION + id, b.build())
+    }
+
+    /** Aviso previo (N minutos antes) con el contexto de la conversacion que origino la cita. */
+    fun avisoPrevio(ctx: Context, id: Int, titulo: String, cuando: String, cuerpo: String, telefono: String, url: String) {
+        val b = Notification.Builder(ctx, CH_RECORDATORIOS).setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle("Pronto: $titulo").setContentText(cuando).setStyle(Notification.BigTextStyle().bigText(cuerpo))
+            .setContentIntent(abrirApp(ctx, BASE_RECORDATORIO + id)).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
+        if (telefono.isNotBlank()) b.addAction(Notification.Action.Builder(null, "Llamar", llamar(ctx, BASE_RECORDATORIO + id + 50000, telefono)).build())
+        if (url.isNotBlank()) b.addAction(Notification.Action.Builder(null, "Ver conversación", abrirUrl(ctx, BASE_RECORDATORIO + id + 60000, url)).build())
+        nm(ctx).notify(BASE_RECORDATORIO + id, b.build())
+    }
+
+    /** Resumen diario de compromisos. */
+    fun resumenDiario(ctx: Context, titulo: String, texto: String, url: String) {
+        val b = Notification.Builder(ctx, CH_ACCIONES).setSmallIcon(R.drawable.ic_mic)
+            .setContentTitle(titulo).setContentText(texto.lineSequence().firstOrNull { it.isNotBlank() } ?: "Tu resumen está listo")
+            .setStyle(Notification.BigTextStyle().bigText(texto)).setContentIntent(if (url.isNotBlank()) abrirUrl(ctx, 7, url) else abrirApp(ctx, 7)).setAutoCancel(true)
+        if (url.isNotBlank()) b.addAction(Notification.Action.Builder(null, "Ver en el panel", abrirUrl(ctx, 8, url)).build())
+        nm(ctx).notify(9, b.build())
     }
 
     fun sugerencia(ctx: Context, id: Int, titulo: String, cuando: String) {

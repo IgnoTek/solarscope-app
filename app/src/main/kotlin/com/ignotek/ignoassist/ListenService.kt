@@ -244,6 +244,7 @@ class ListenService : Service() {
         var vozMs = 0; var silencioMs = 0; var ultimoCorteSilencio = -1
         var inicioSegmentoMs = 0L
         var silencioTotalMs = 0L // para detectar microfono mudo
+        var calentamientoMs = 1500 // ignora el arranque del microfono (ruido de manipulacion)
         var fallos = 0
         var rec: AudioRecord = crearRecorder() ?: run {
             grabando.set(false); prefs.grabando = false
@@ -254,7 +255,7 @@ class ListenService : Service() {
         val maxSegMs = prefs.maxSegundosSegmento * 1000
 
         fun finalizarSegmento(descartar: Boolean) {
-            if (enSegmento && !descartar && vozMs >= 700) {
+            if (enSegmento && !descartar && vozMs >= 1000) {
                 val len = segLen
                 val copia = seg.copyOf(len)
                 val inicio = inicioSegmentoMs
@@ -280,6 +281,7 @@ class ListenService : Service() {
                 continue
             }
             fallos = 0
+            if (calentamientoMs > 0) { calentamientoMs -= 20; vad.esVoz(frame, n); continue }
             val voz = vad.esVoz(frame, n)
             // Microfono mudo (otra app lo tiene, o restriccion de Android al arrancar en segundo plano)
             if (vad.ultimoDb <= -89.0) silencioTotalMs += 20 else silencioTotalMs = 0
@@ -305,7 +307,7 @@ class ListenService : Service() {
                 if (silencioMs >= 1400) {
                     // recorta el silencio final a 500 ms
                     segLen -= ((silencioMs - 500) * SAMPLE_RATE / 1000).coerceAtMost(segLen)
-                    finalizarSegmento(descartar = vozMs < 700)
+                    finalizarSegmento(descartar = vozMs < 1000)
                     vad.reiniciar()
                 } else if (durMs >= maxSegMs) {
                     if (ultimoCorteSilencio > segLen - SAMPLE_RATE * 15 && ultimoCorteSilencio > 0) {
@@ -323,7 +325,7 @@ class ListenService : Service() {
                 }
             }
         }
-        if (enSegmento) finalizarSegmento(descartar = vozMs < 700)
+        if (enSegmento) finalizarSegmento(descartar = vozMs < 1000)
         try { rec.stop(); rec.release() } catch (e: Exception) { }
     }
 
@@ -460,6 +462,18 @@ class ListenService : Service() {
                 "pausar" -> main.post { pausar(datos.optInt("minutos", prefs.pausaMinutosDefecto).let { if (it <= 0) prefs.pausaMinutosDefecto else it }) }
                 "apagar" -> main.post { prefs.escuchaDeseada = false; prefs.pausadoHasta = 0L; detenerGrabacion(); actualizarNotificacion() }
                 "reanudar" -> main.post { prefs.pausadoHasta = 0L; prefs.escuchaDeseada = true; iniciarGrabacion() }
+                "aviso" -> {
+                    val cuerpo = StringBuilder()
+                    cuerpo.append(datos.optString("cuando")).append(" (en ").append(datos.optInt("minutos", 30)).append(" min)")
+                    if (datos.optString("lugar").isNotBlank()) cuerpo.append("\n📍 ").append(datos.optString("lugar"))
+                    if (datos.optString("personas").isNotBlank()) cuerpo.append("\n👤 ").append(datos.optString("personas"))
+                    if (datos.optString("resumen").isNotBlank()) cuerpo.append("\n\nLo hablado: ").append(datos.optString("resumen"))
+                    if (datos.optString("cita_textual").isNotBlank()) cuerpo.append("\n«").append(datos.optString("cita_textual")).append("»")
+                    var tel = datos.optString("telefono", "")
+                    if (tel.isBlank()) tel = ejecutor.buscarEnContactos(datos.optString("personas", "")) ?: ""
+                    Notifs.avisoPrevio(this, datos.optInt("accion_id", c.optInt("id")), datos.optString("titulo"), datos.optString("cuando"), cuerpo.toString(), tel, datos.optString("url", ""))
+                }
+                "resumen" -> Notifs.resumenDiario(this, datos.optString("titulo", "Tu resumen de hoy"), datos.optString("texto", ""), datos.optString("url", ""))
             }
         }
         if (ejecutadas > 0) { pedirSyncYa = true; despertarSync(); main.post { actualizarNotificacion() } }

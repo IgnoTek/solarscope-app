@@ -154,6 +154,12 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
         val recAlCal = o.optBoolean("recordatorios_al_calendario", true)
         val ini = o.optLong("inicio_ms", 0L)
         val cuando = cuandoTexto(ini, o.optBoolean("todo_el_dia", false))
+        var telefono = o.optString("telefono", "")
+        var telefonoDeContactos = false
+        if (telefono.isBlank() && op != "anular") {
+            val buscado = buscarEnContactos(o.optString("personas", ""))
+            if (buscado != null) { telefono = buscado; telefonoDeContactos = true }
+        }
         try {
             when (op) {
                 "anular" -> {
@@ -185,9 +191,11 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
                         }
                         else -> refs.add("nota:$id")
                     }
+                    if (telefono.isNotBlank()) o.put("telefono", telefono)
                     guardarLocal(o, refs.joinToString(";"))
-                    Notifs.accionCreada(ctx, id, titulo, cuando, tipo, true)
+                    Notifs.accionCreada(ctx, id, titulo, cuando, tipo, true, telefono)
                     res.put("ok", true).put("ref", refs.joinToString(";"))
+                    if (telefonoDeContactos) res.put("telefono", telefono)
                 }
                 else -> res.put("ok", false).put("error", "operacion desconocida $op")
             }
@@ -201,8 +209,41 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
         val l = JSONObject()
         l.put("id", o.optInt("id")).put("tipo", o.optString("tipo")).put("titulo", o.optString("titulo")).put("descripcion", o.optString("descripcion"))
             .put("inicio_ms", o.optLong("inicio_ms", 0L)).put("todo_el_dia", o.optBoolean("todo_el_dia", false)).put("lugar", o.optString("lugar"))
-            .put("personas", o.optString("personas")).put("ref", ref).put("estado", "creada").put("creado_ms", System.currentTimeMillis())
+            .put("personas", o.optString("personas")).put("telefono", o.optString("telefono", "")).put("url_conversacion", o.optString("url_conversacion", ""))
+            .put("ref", ref).put("estado", "creada").put("creado_ms", System.currentTimeMillis())
         prefs.registrarAccion(l)
+    }
+
+    fun tieneContactos(): Boolean = ctx.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    /** Busca el telefono de la primera persona de la lista en los contactos del telefono (nombre completo o nombre+apellido contenidos). */
+    fun buscarEnContactos(personas: String): String? {
+        if (!tieneContactos() || personas.isBlank()) return null
+        for (nombre in personas.split(",").map { it.trim() }.filter { it.length >= 3 }) {
+            val tel = buscarContacto(nombre)
+            if (tel != null) return tel
+        }
+        return null
+    }
+
+    private fun buscarContacto(nombre: String): String? {
+        val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+        val proj = arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+        val tokens = nombre.split(" ").filter { it.length >= 3 }
+        if (tokens.isEmpty()) return null
+        val candidatos = ArrayList<Pair<String, String>>()
+        try {
+            ctx.contentResolver.query(uri, proj, android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?", arrayOf("%" + tokens[0] + "%"), null)?.use { c ->
+                while (c.moveToNext()) { candidatos.add(Pair(c.getString(0) ?: "", c.getString(1) ?: "")) }
+            }
+        } catch (e: Exception) { return null }
+        fun norm(s: String) = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("[^a-z0-9 ]"), "").trim()
+        val n = norm(nombre)
+        val exacto = candidatos.firstOrNull { norm(it.first) == n }
+        if (exacto != null) return exacto.second
+        val parciales = candidatos.filter { c -> val cn = norm(c.first); tokens.all { cn.contains(norm(it)) } }
+        val nombres = parciales.map { norm(it.first) }.distinct()
+        return if (nombres.size == 1) parciales.first().second else null
     }
 
     private fun deshacerRef(ref: String, id: Int) {

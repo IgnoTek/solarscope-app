@@ -226,6 +226,15 @@ class MainActivity : Activity() {
             root.addView(p)
         }
 
+        // --- contactos (para el boton Llamar)
+        if (!ejecutor.tieneContactos()) {
+            val ct = card()
+            ct.addView(texto("Contactos del teléfono", 16f, INK, true))
+            ct.addView(texto("Con acceso a tus contactos, cuando el asistente agende algo con alguien que tienes guardado, la notificación trae el botón «Llamar» y el teléfono queda en Personas.", 13f, MUTE))
+            ct.addView(boton("Conectar contactos", TEAL) { requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), 2) })
+            root.addView(ct)
+        }
+
         // --- calendario
         val cal = ejecutor.calendarioElegido()
         val k = card()
@@ -252,6 +261,8 @@ class MainActivity : Activity() {
             colA.addView(tit)
             colA.addView(texto(ejecutor.cuandoTexto(o.optLong("inicio_ms", 0L), o.optBoolean("todo_el_dia", false)) + (if (o.optString("lugar").isNotBlank()) " · " + o.optString("lugar") else ""), 12f, if (anulada) MUTE else TEAL))
             filaA.addView(ico); filaA.addView(colA)
+            val telA = o.optString("telefono", "")
+            if (telA.isNotBlank() && !anulada) { val l = texto("📞", 18f); l.setPadding(dp(6), dp(6), dp(6), dp(6)); l.setOnClickListener { try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + telA.filter { ch -> ch.isDigit() || ch == '+' }))) } catch (e: Exception) { } }; filaA.addView(l) }
             if (!anulada) { val d = texto("Deshacer", 12f, ERR, true); d.setPadding(dp(8), dp(6), dp(4), dp(6)); d.setOnClickListener { confirmarDeshacer(o) }; filaA.addView(d) }
             a.addView(filaA)
         }
