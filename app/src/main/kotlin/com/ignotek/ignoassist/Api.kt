@@ -25,7 +25,7 @@ object Api {
         return Respuesta(code, json, if (code == 200 && json != null) null else err)
     }
 
-    fun post(url: String, campos: Map<String, String>, timeoutMs: Int = 30000): Respuesta {
+    fun post(url: String, campos: Map<String, String>, timeoutMs: Int = 60000): Respuesta {
         return try {
             val c = URL(url).openConnection() as HttpURLConnection
             c.requestMethod = "POST"

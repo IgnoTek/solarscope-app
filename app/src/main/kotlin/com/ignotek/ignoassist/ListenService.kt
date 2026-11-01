@@ -440,6 +440,7 @@ class ListenService : Service() {
         var ejecutadas = 0
         for (i in 0 until ordenes.length()) {
             val o = ordenes.optJSONObject(i) ?: continue
+            if (prefs.ordenYaEjecutada(o.optInt("id"), o.optString("operacion", "crear"), o.optString("v", ""))) continue
             val res = ejecutor.ejecutar(o)
             prefs.agregarResultado(res)
             ejecutadas++

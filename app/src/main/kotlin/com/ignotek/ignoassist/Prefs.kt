@@ -148,5 +148,16 @@ class Prefs(ctx: Context) {
         return false
     }
 
+    /** Evita ejecutar dos veces la misma orden si llega por subida y por sync a la vez. */
+    @Synchronized fun ordenYaEjecutada(id: Int, operacion: String, version: String): Boolean {
+        val clave = "$id|$operacion|$version"
+        val s = sp.getStringSet("ordenes_hechas", emptySet()) ?: emptySet()
+        if (s.contains(clave)) return true
+        val n = HashSet(s); n.add(clave)
+        if (n.size > 300) n.clear()
+        sp.edit().putStringSet("ordenes_hechas", n).apply()
+        return false
+    }
+
     fun desvincular() { sp.edit().remove("token").putBoolean("escucha_deseada", false).putLong("pausado_hasta", 0L).putString("resultados", "[]").putString("decisiones", "[]").apply() }
 }
