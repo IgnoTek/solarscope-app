@@ -50,6 +50,12 @@ class Prefs(ctx: Context) {
     var nombreUsuario: String
         get() = sp.getString("nombre_usuario", "") ?: ""
         set(v) = sp.edit().putString("nombre_usuario", v).apply()
+    var umbralDb: Int
+        get() = sp.getInt("umbral_db", -45)
+        set(v) = sp.edit().putInt("umbral_db", v.coerceIn(-70, -20)).apply()
+    var minVozMs: Int
+        get() = sp.getInt("min_voz_ms", 1200)
+        set(v) = sp.edit().putInt("min_voz_ms", v.coerceIn(500, 5000)).apply()
     var pausaMinutosDefecto: Int
         get() = sp.getInt("pausa_min", 30)
         set(v) = sp.edit().putInt("pausa_min", v).apply()

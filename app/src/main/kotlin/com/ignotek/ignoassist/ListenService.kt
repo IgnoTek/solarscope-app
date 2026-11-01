@@ -233,7 +233,8 @@ class ListenService : Service() {
     }
 
     private fun bucleGrabacion() {
-        val vad = Vad()
+        val vad = Vad(prefs.umbralDb.toDouble())
+        val minVoz = prefs.minVozMs
         val frame = ShortArray(FRAME)
         val preRollFrames = 25
         val preRoll = Array(preRollFrames) { ShortArray(FRAME) }
@@ -255,7 +256,7 @@ class ListenService : Service() {
         val maxSegMs = prefs.maxSegundosSegmento * 1000
 
         fun finalizarSegmento(descartar: Boolean) {
-            if (enSegmento && !descartar && vozMs >= 1000) {
+            if (enSegmento && !descartar && vozMs >= minVoz) {
                 val len = segLen
                 val copia = seg.copyOf(len)
                 val inicio = inicioSegmentoMs
@@ -307,7 +308,7 @@ class ListenService : Service() {
                 if (silencioMs >= 1400) {
                     // recorta el silencio final a 500 ms
                     segLen -= ((silencioMs - 500) * SAMPLE_RATE / 1000).coerceAtMost(segLen)
-                    finalizarSegmento(descartar = vozMs < 1000)
+                    finalizarSegmento(descartar = vozMs < minVoz)
                     vad.reiniciar()
                 } else if (durMs >= maxSegMs) {
                     if (ultimoCorteSilencio > segLen - SAMPLE_RATE * 15 && ultimoCorteSilencio > 0) {
@@ -325,20 +326,24 @@ class ListenService : Service() {
                 }
             }
         }
-        if (enSegmento) finalizarSegmento(descartar = vozMs < 1000)
+        if (enSegmento) finalizarSegmento(descartar = vozMs < minVoz)
         try { rec.stop(); rec.release() } catch (e: Exception) { }
     }
 
     private fun guardarSegmento(pcm: ShortArray, muestras: Int, inicioMs: Long, vozMs: Int) {
         val dir = File(filesDir, "pendientes"); dir.mkdirs()
         val base = "seg-" + nombreFecha.format(Date(inicioMs)) + "-" + (inicioMs % 1000)
-        var archivo = File(dir, "$base.m4a")
-        try { AacEncoder.codificar(pcm, muestras, archivo) } catch (e: Exception) {
-            archivo.delete(); archivo = File(dir, "$base.wav")
-            try { AacEncoder.escribirWav(pcm, muestras, archivo) } catch (e2: Exception) { return }
+        // Se escribe en un archivo temporal y se renombra al final: el hilo de subida nunca ve un archivo a medias.
+        var ext = "m4a"
+        val tmp = File(dir, "$base.tmp")
+        try { AacEncoder.codificar(pcm, muestras, tmp) } catch (e: Exception) {
+            tmp.delete(); ext = "wav"
+            try { AacEncoder.escribirWav(pcm, muestras, tmp) } catch (e2: Exception) { tmp.delete(); return }
         }
+        if (!tmp.exists() || tmp.length() < 400) { tmp.delete(); return }
         val meta = JSONObject().put("inicio_ms", inicioMs).put("duracion_ms", muestras * 1000L / SAMPLE_RATE).put("voz_ms", vozMs)
         File(dir, "$base.json").writeText(meta.toString())
+        if (!tmp.renameTo(File(dir, "$base.$ext"))) { tmp.delete(); File(dir, "$base.json").delete(); return }
         despertarSubida()
     }
 
@@ -362,7 +367,7 @@ class ListenService : Service() {
         var espera = 15000L
         while (vivo.get()) {
             val dir = File(filesDir, "pendientes")
-            val archivos = dir.listFiles { f -> f.name.endsWith(".m4a") || f.name.endsWith(".wav") }?.sortedBy { it.name } ?: emptyList()
+            val archivos = dir.listFiles { f -> (f.name.endsWith(".m4a") || f.name.endsWith(".wav")) && File(dir, f.nameWithoutExtension + ".json").exists() }?.sortedBy { it.name } ?: emptyList()
             if (archivos.isEmpty() || !prefs.vinculado || !hayRed()) {
                 synchronized(lockSubida) { try { lockSubida.wait(if (archivos.isEmpty()) 60000L else 20000L) } catch (e: InterruptedException) { } }
                 continue
@@ -434,6 +439,8 @@ class ListenService : Service() {
             if (c.has("sync_segundos")) prefs.syncSegundos = c.optInt("sync_segundos", 30)
             if (c.has("subir_solo_wifi")) prefs.soloWifi = c.optBoolean("subir_solo_wifi", false)
             if (c.has("max_segundos_segmento")) prefs.maxSegundosSegmento = c.optInt("max_segundos_segmento", 60)
+            if (c.has("umbral_db")) prefs.umbralDb = c.optInt("umbral_db", -45)
+            if (c.has("min_voz_ms")) prefs.minVozMs = c.optInt("min_voz_ms", 1200)
             if (c.has("nombre_asistente")) prefs.nombreAsistente = c.optString("nombre_asistente", "Igno")
             if (c.has("nombre_usuario")) prefs.nombreUsuario = c.optString("nombre_usuario", "")
             if (c.has("pausa_minutos_defecto")) prefs.pausaMinutosDefecto = c.optInt("pausa_minutos_defecto", 30)

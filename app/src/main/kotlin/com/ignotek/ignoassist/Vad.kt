@@ -7,7 +7,7 @@ import kotlin.math.sqrt
  * Detector de voz por energia con piso de ruido adaptativo (frames de 20 ms).
  * Devuelve true cuando el frame suena a voz (claramente por encima del ruido de fondo).
  */
-class Vad {
+class Vad(private val umbralDb: Double = -45.0) {
     private var pisoDb = -55.0
     private var consecutivos = 0
     var ultimoDb = -90.0
@@ -34,7 +34,7 @@ class Vad {
         if (pisoDb > -30.0) pisoDb = -30.0
         val tasaCruces = cruces.toDouble() / n
         // Voz: energia por encima del piso, no demasiado baja en absoluto y con cruces por cero tipicos de voz (no un tono puro ni ruido blanco extremo).
-        val voz = db > pisoDb + 9.0 && db > -52.0 && tasaCruces in 0.01..0.45
+        val voz = db > pisoDb + 9.0 && db > umbralDb && tasaCruces in 0.01..0.45
         consecutivos = if (voz) consecutivos + 1 else 0
         return consecutivos >= 2
     }
