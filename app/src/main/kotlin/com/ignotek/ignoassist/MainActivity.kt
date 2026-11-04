@@ -276,7 +276,8 @@ class MainActivity : Activity() {
             val tit = texto(o.optString("titulo"), 15f, if (hecha) MUTE else INK, true)
             if (hecha) tit.paintFlags = tit.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
             colA.addView(tit)
-            val meta = ejecutor.cuandoTexto(o.optLong("inicio_ms", 0L), o.optBoolean("todo_el_dia", false)) + (if (o.optString("lugar").isNotBlank()) " · " + o.optString("lugar") else "")
+            val etq = if (o.optString("destino") == "calendario") "📅 " else if (!esNota) "📝 " else ""
+            val meta = etq + ejecutor.cuandoTexto(o.optLong("inicio_ms", 0L), o.optBoolean("todo_el_dia", false)) + (if (o.optString("lugar").isNotBlank()) " · " + o.optString("lugar") else "")
             colA.addView(texto(meta, 12f, if (hecha) MUTE else TEAL))
             filaA.addView(circ); filaA.addView(colA)
             val telA = o.optString("telefono", "")

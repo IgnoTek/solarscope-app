@@ -220,7 +220,7 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
         l.put("id", o.optInt("id")).put("tipo", o.optString("tipo")).put("titulo", o.optString("titulo")).put("descripcion", o.optString("descripcion"))
             .put("inicio_ms", o.optLong("inicio_ms", 0L)).put("todo_el_dia", o.optBoolean("todo_el_dia", false)).put("lugar", o.optString("lugar"))
             .put("personas", o.optString("personas")).put("telefono", o.optString("telefono", "")).put("url_conversacion", o.optString("url_conversacion", ""))
-            .put("ref", ref).put("estado", "creada").put("creado_ms", System.currentTimeMillis())
+            .put("destino", o.optString("destino", "lista")).put("ref", ref).put("estado", "creada").put("creado_ms", System.currentTimeMillis())
         prefs.registrarAccion(l)
     }
 
