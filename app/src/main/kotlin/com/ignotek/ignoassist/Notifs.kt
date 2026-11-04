@@ -75,6 +75,7 @@ object Notifs {
         val b = Notification.Builder(ctx, CH_ACCIONES).setSmallIcon(R.drawable.ic_mic)
             .setContentTitle("$etiqueta: $titulo").setContentText(cuando).setStyle(Notification.BigTextStyle().bigText(cuando))
             .setContentIntent(abrirApp(ctx, BASE_ACCION + id)).setAutoCancel(true)
+        if (tipo != "nota") b.addAction(Notification.Action.Builder(null, "✓ Hecho", broadcast(ctx, ActionReceiver.ACCION_HECHO, BASE_ACCION + id + 70000, id)).build())
         if (telefono.isNotBlank()) b.addAction(Notification.Action.Builder(null, "Llamar", llamar(ctx, BASE_ACCION + id + 50000, telefono)).build())
         if (puedeDeshacer) b.addAction(Notification.Action.Builder(null, "Deshacer", broadcast(ctx, ActionReceiver.ACCION_DESHACER, BASE_ACCION + id, id)).build())
         nm(ctx).notify(BASE_ACCION + id, b.build())
@@ -112,6 +113,7 @@ object Notifs {
         val b = Notification.Builder(ctx, CH_RECORDATORIOS).setSmallIcon(R.drawable.ic_mic)
             .setContentTitle("⏰ $titulo").setContentText(texto).setStyle(Notification.BigTextStyle().bigText(texto))
             .setContentIntent(abrirApp(ctx, BASE_RECORDATORIO + id)).setAutoCancel(true).setCategory(Notification.CATEGORY_REMINDER)
+            .addAction(Notification.Action.Builder(null, "✓ Hecho", broadcast(ctx, ActionReceiver.ACCION_HECHO, BASE_RECORDATORIO + id + 70000, id)).build())
             .addAction(Notification.Action.Builder(null, "Posponer 10 min", broadcast(ctx, ActionReceiver.ACCION_POSPONER, BASE_RECORDATORIO + id, id)).build())
         nm(ctx).notify(BASE_RECORDATORIO + id, b.build())
     }

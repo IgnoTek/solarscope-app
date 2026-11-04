@@ -444,7 +444,9 @@ class ListenService : Service() {
             if (c.has("nombre_asistente")) prefs.nombreAsistente = c.optString("nombre_asistente", "Igno")
             if (c.has("nombre_usuario")) prefs.nombreUsuario = c.optString("nombre_usuario", "")
             if (c.has("pausa_minutos_defecto")) prefs.pausaMinutosDefecto = c.optInt("pausa_minutos_defecto", 30)
+            if (c.has("destino_acciones")) prefs.destinoAcciones = c.optString("destino_acciones", "lista")
         }
+        j.optJSONArray("estados")?.let { prefs.aplicarEstados(it) }
         val ordenes = j.optJSONArray("ordenes") ?: JSONArray()
         var ejecutadas = 0
         for (i in 0 until ordenes.length()) {

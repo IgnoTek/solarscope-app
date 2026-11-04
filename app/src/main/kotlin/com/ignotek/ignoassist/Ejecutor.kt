@@ -170,17 +170,27 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
                 }
                 "actualizar", "crear" -> {
                     if (op == "actualizar") deshacerRef(refAnterior, id)
+                    val destino = o.optString("destino", prefs.destinoAcciones)
+                    val alCalendario = destino == "calendario" || destino == "ambos"
                     val refs = ArrayList<String>()
                     when (tipo) {
                         "evento" -> {
                             if (ini <= 0) throw IllegalStateException("evento sin fecha")
-                            refs.add("cal:" + crearEvento(o, minAviso))
+                            var puesto = false
+                            if (alCalendario && tieneCalendario()) {
+                                try { refs.add("cal:" + crearEvento(o, minAviso)); puesto = true } catch (e: Exception) { }
+                            }
+                            // Modo "lista" (o si el calendario no estaba disponible): alarma a la hora del evento para que suene igual.
+                            if (!puesto) {
+                                programarAlarma(id, ini, titulo, o.optString("descripcion").ifBlank { "Evento: $titulo" })
+                                refs.add("al:$id")
+                            }
                         }
                         "recordatorio", "tarea" -> {
                             if (ini > 0) {
                                 programarAlarma(id, ini, titulo, o.optString("descripcion").ifBlank { "Recordatorio de IgnoAssist" })
                                 refs.add("al:$id")
-                                if (recAlCal && tieneCalendario()) {
+                                if (alCalendario && recAlCal && tieneCalendario()) {
                                     val copia = JSONObject(o.toString())
                                     copia.put("fin_ms", ini + 15 * 60000L).put("todo_el_dia", false)
                                     try { refs.add("cal:" + crearEvento(copia, 0)) } catch (e: Exception) { }
@@ -255,6 +265,15 @@ class Ejecutor(private val ctx: Context, private val prefs: Prefs) {
             }
         }
         Notifs.cancelar(ctx, Notifs.BASE_RECORDATORIO + id)
+    }
+
+    /** Marcar hecho (o reabrir) desde la notificacion o la app; reporta al servidor para que el panel lo refleje. */
+    fun completarLocal(id: Int, hecha: Boolean): Boolean {
+        if (prefs.accion(id) == null) return false
+        prefs.marcarCompletada(id, hecha)
+        if (hecha) { cancelarAlarma(id); Notifs.cancelar(ctx, Notifs.BASE_RECORDATORIO + id); Notifs.cancelar(ctx, Notifs.BASE_ACCION + id) }
+        prefs.agregarResultado(JSONObject().put("accion_id", id).put("operacion", "completar").put("hecha", hecha).put("ok", true))
+        return true
     }
 
     /** Deshacer desde la notificacion o la app: borra en el telefono y reporta anulada. */

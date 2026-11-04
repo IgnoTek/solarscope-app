@@ -244,27 +244,50 @@ class MainActivity : Activity() {
         k.addView(boton("Cambiar calendario", Color.parseColor("#F1F5F9"), INK) { elegirCalendario() })
         root.addView(k)
 
-        // --- acciones recientes
+        // --- Mi lista (to-do)
         val a = card()
-        a.addView(texto("Creado por el asistente", 16f, INK, true))
+        a.addView(texto("Mi lista", 16f, INK, true))
+        val destinoTxt = when (prefs.destinoAcciones) { "calendario" -> "Se guarda en tu calendario."; "ambos" -> "Se guarda en esta lista y en tu calendario."; else -> "Se guarda aquí (no toca tu calendario)." }
+        a.addView(texto(destinoTxt + " Toca el círculo cuando lo hagas.", 12f, MUTE))
         val arr = prefs.acciones()
-        if (arr.length() == 0) a.addView(texto("Todavía nada. Cuando acuerdes algo en una conversación, aparecerá aquí.", 13f, MUTE))
-        for (i in 0 until minOf(arr.length(), 20)) {
+        val pend = ArrayList<JSONObject>(); val hechas = ArrayList<JSONObject>()
+        for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
-            val filaA = LinearLayout(this); filaA.orientation = LinearLayout.HORIZONTAL; filaA.gravity = Gravity.CENTER_VERTICAL; filaA.setPadding(0, dp(8), 0, dp(8))
-            val ico = texto(when (o.optString("tipo")) { "evento" -> "📅"; "recordatorio" -> "⏰"; "tarea" -> "✅"; else -> "📝" }, 20f)
-            ico.layoutParams = LinearLayout.LayoutParams(dp(34), ViewGroup.LayoutParams.WRAP_CONTENT)
+            if (o.optString("estado") == "anulada") continue
+            if (o.has("completada_ms")) hechas.add(o) else pend.add(o)
+        }
+        if (pend.isEmpty() && hechas.isEmpty()) a.addView(texto("Todavía nada. Cuando acuerdes algo en una conversación, aparecerá aquí.", 13f, MUTE))
+        fun filaItem(o: JSONObject, hecha: Boolean) {
+            val id = o.optInt("id")
+            val esNota = o.optString("tipo") == "nota"
+            val filaA = LinearLayout(this); filaA.orientation = LinearLayout.HORIZONTAL; filaA.gravity = Gravity.CENTER_VERTICAL; filaA.setPadding(0, dp(9), 0, dp(9))
+            // círculo de completado (notas no se completan: muestran su emoji)
+            val circ = TextView(this); circ.gravity = Gravity.CENTER; circ.setTextColor(Color.WHITE); circ.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            circ.layoutParams = LinearLayout.LayoutParams(dp(30), dp(30)).also { it.rightMargin = dp(10) }
+            if (esNota) { circ.text = "📝"; circ.setTextColor(INK) }
+            else {
+                circ.text = if (hecha) "✓" else ""
+                val bg = GradientDrawable(); bg.shape = GradientDrawable.OVAL
+                if (hecha) bg.setColor(TEAL) else { bg.setColor(Color.WHITE); bg.setStroke(dp(2), Color.parseColor("#CFE8E5")) }
+                circ.background = bg
+                circ.setOnClickListener { ejecutor.completarLocal(id, !hecha); ListenService.lanzar(this, ListenService.ACTION_SYNC); handler.postDelayed({ render() }, 250) }
+            }
             val colA = LinearLayout(this); colA.orientation = LinearLayout.VERTICAL; colA.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            val anulada = o.optString("estado") == "anulada"
-            val tit = texto(o.optString("titulo"), 15f, if (anulada) MUTE else INK, true)
-            if (anulada) tit.paintFlags = tit.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
+            val tit = texto(o.optString("titulo"), 15f, if (hecha) MUTE else INK, true)
+            if (hecha) tit.paintFlags = tit.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
             colA.addView(tit)
-            colA.addView(texto(ejecutor.cuandoTexto(o.optLong("inicio_ms", 0L), o.optBoolean("todo_el_dia", false)) + (if (o.optString("lugar").isNotBlank()) " · " + o.optString("lugar") else ""), 12f, if (anulada) MUTE else TEAL))
-            filaA.addView(ico); filaA.addView(colA)
+            val meta = ejecutor.cuandoTexto(o.optLong("inicio_ms", 0L), o.optBoolean("todo_el_dia", false)) + (if (o.optString("lugar").isNotBlank()) " · " + o.optString("lugar") else "")
+            colA.addView(texto(meta, 12f, if (hecha) MUTE else TEAL))
+            filaA.addView(circ); filaA.addView(colA)
             val telA = o.optString("telefono", "")
-            if (telA.isNotBlank() && !anulada) { val l = texto("📞", 18f); l.setPadding(dp(6), dp(6), dp(6), dp(6)); l.setOnClickListener { try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + telA.filter { ch -> ch.isDigit() || ch == '+' }))) } catch (e: Exception) { } }; filaA.addView(l) }
-            if (!anulada) { val d = texto("Deshacer", 12f, ERR, true); d.setPadding(dp(8), dp(6), dp(4), dp(6)); d.setOnClickListener { confirmarDeshacer(o) }; filaA.addView(d) }
+            if (telA.isNotBlank() && !hecha) { val l = texto("📞", 18f); l.setPadding(dp(6), dp(6), dp(6), dp(6)); l.setOnClickListener { try { startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + telA.filter { ch -> ch.isDigit() || ch == '+' }))) } catch (e: Exception) { } }; filaA.addView(l) }
+            val d = texto(if (hecha) "✕" else "Deshacer", 12f, ERR, true); d.setPadding(dp(8), dp(6), dp(4), dp(6)); d.setOnClickListener { confirmarDeshacer(o) }; filaA.addView(d)
             a.addView(filaA)
+        }
+        for (o in pend.take(30)) filaItem(o, false)
+        if (hechas.isNotEmpty()) {
+            a.addView(texto("Completadas", 12f, MUTE, true).also { it.setPadding(0, dp(10), 0, 0) })
+            for (o in hechas.take(15)) filaItem(o, true)
         }
         root.addView(a)
 

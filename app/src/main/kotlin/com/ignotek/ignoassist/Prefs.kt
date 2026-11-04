@@ -59,6 +59,10 @@ class Prefs(ctx: Context) {
     var pausaMinutosDefecto: Int
         get() = sp.getInt("pausa_min", 30)
         set(v) = sp.edit().putInt("pausa_min", v).apply()
+    /** lista = solo to-do de IgnoAssist | calendario = Google Calendar | ambos */
+    var destinoAcciones: String
+        get() = sp.getString("destino_acciones", "lista") ?: "lista"
+        set(v) = sp.edit().putString("destino_acciones", v).apply()
 
     // Contadores
     var subidasHoy: Int
@@ -136,6 +140,25 @@ class Prefs(ctx: Context) {
         val a = accion(id) ?: return
         a.put("estado", estado)
         registrarAccion(a)
+    }
+    @Synchronized fun marcarCompletada(id: Int, hecha: Boolean) {
+        val a = accion(id) ?: return
+        if (hecha) a.put("completada_ms", System.currentTimeMillis()) else a.remove("completada_ms")
+        registrarAccion(a)
+    }
+    /** Refleja en la copia local los cambios de estado hechos desde el panel (lista "estados" del sync). */
+    @Synchronized fun aplicarEstados(estados: org.json.JSONArray) {
+        var cambio = false
+        for (i in 0 until estados.length()) {
+            val e = estados.optJSONObject(i) ?: continue
+            val a = accion(e.optInt("id")) ?: continue
+            if (e.optBoolean("anulada") && a.optString("estado") != "anulada") { a.put("estado", "anulada"); registrarAccion(a); cambio = true }
+            else {
+                val hecha = e.optBoolean("completada")
+                val tenia = a.has("completada_ms")
+                if (hecha != tenia) { if (hecha) a.put("completada_ms", System.currentTimeMillis()) else a.remove("completada_ms"); registrarAccion(a); cambio = true }
+            }
+        }
     }
     @Synchronized fun sugerenciaNotificada(id: Int): Boolean {
         val s = sp.getStringSet("sug_notif", emptySet()) ?: emptySet()

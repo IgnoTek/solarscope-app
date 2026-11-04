@@ -25,6 +25,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val ACCION_CREAR = "com.ignotek.ignoassist.N_CREAR"
         const val ACCION_IGNORAR = "com.ignotek.ignoassist.N_IGNORAR"
         const val ACCION_POSPONER = "com.ignotek.ignoassist.N_POSPONER"
+        const val ACCION_HECHO = "com.ignotek.ignoassist.N_HECHO"
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {
@@ -47,6 +48,11 @@ class ActionReceiver : BroadcastReceiver() {
                 val a = prefs.accion(id)
                 Notifs.cancelar(ctx, Notifs.BASE_RECORDATORIO + id)
                 Ejecutor(ctx, prefs).programarAlarma(id, System.currentTimeMillis() + 10 * 60000L, a?.optString("titulo") ?: "Recordatorio", a?.optString("descripcion") ?: "")
+            }
+            ACCION_HECHO -> {
+                Notifs.cancelar(ctx, Notifs.BASE_ACCION + id); Notifs.cancelar(ctx, Notifs.BASE_RECORDATORIO + id)
+                Ejecutor(ctx, prefs).completarLocal(id, true)
+                ListenService.lanzar(ctx, ListenService.ACTION_SYNC)
             }
         }
     }
